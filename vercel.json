@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/webpay/poll",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

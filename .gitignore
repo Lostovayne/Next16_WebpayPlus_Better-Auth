@@ -2,13 +2,6 @@
 
 # dependencies
 /node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
 # testing
 /coverage
@@ -26,12 +19,18 @@
 
 # debug
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+bun-debug.log*
+bun-error.log*
 
-# env files (can opt-in for committing if needed)
+# env files — .env.example SÍ se commitea, el resto NO
 .env*
+!.env.example
+
+# lockfiles de otros package managers (usamos bun)
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+bun.lock
 
 # vercel
 .vercel
@@ -39,3 +38,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# prisma generated client (se regenera en deploy)
+/generated/prisma
