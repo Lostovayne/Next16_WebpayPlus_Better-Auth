@@ -41,3 +41,8 @@ next-env.d.ts
 
 # prisma generated client (se regenera en deploy)
 /generated/prisma
+
+# agents
+
+CLAUDE.md
+AGENTS.md
