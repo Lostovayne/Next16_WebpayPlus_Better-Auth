@@ -54,6 +54,12 @@ export class PrismaTransactionRepository {
     return this.toDomain(record);
   }
 
+  async findByBuyOrder(buyOrder: string): Promise<WebpayTransaction | null> {
+    const record = await prisma.webpayTransaction.findUnique({ where: { buyOrder } });
+    if (!record) return null;
+    return this.toDomain(record);
+  }
+
   /**
    * Busca transacciones que llevan más de N minutos en estado INITIALIZED.
    *

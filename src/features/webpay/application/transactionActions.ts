@@ -151,10 +151,23 @@ export async function confirmTransactionAction(token: string) {
  * (el TBK_TOKEN no es el token de pago, es un identificador del abandono).
  */
 export async function abortTransactionAction(tbkToken: string, buyOrder: string): Promise<void> {
-  // En un sistema completo añadirías findByBuyOrder al repositorio.
-  // Por ahora lo dejamos registrado para trazabilidad via logs.
-  // El Worker de polling limpiará las que queden en INITIALIZED sin token.
-  console.warn(`[Webpay] Pago abortado por usuario. TBK_TOKEN: ${tbkToken}, buyOrder: ${buyOrder}`);
+  // Transbank envía el buyOrder tanto en cancelaciones como en timeouts.
+  // Buscamos y marcamos ABORTED de inmediato para no depender del Worker.
+  // Si no encontramos la transacción, logueamos para trazabilidad — no es un error fatal.
+  const transaction = await transactionRepository.findByBuyOrder(buyOrder);
+
+  if (!transaction) {
+    console.warn(
+      `[Webpay] abortTransactionAction: buyOrder "${buyOrder}" no encontrado. TBK_TOKEN: ${tbkToken}`,
+    );
+    return;
+  }
+
+  // Solo transiciones válidas desde INITIALIZED — si ya está en estado terminal, no tocamos nada.
+  if (transaction.isTerminal) return;
+
+  transaction.markAsAbortedByClient(`TBK_TOKEN:${tbkToken.slice(0, 20)}`);
+  await transactionRepository.save(transaction);
 }
 
 // ─── Use Case 4: Polling del Worker ─────────────────────────────────────────

@@ -57,9 +57,14 @@ export class WebpayTransaction {
     if (amount <= 0) {
       throw new Error("Monto de transacción inválido: debe ser mayor a cero.");
     }
+    // Transbank Plus: límite máximo documentado para transacciones en CLP.
+    if (amount > 999_999_999) {
+      throw new Error("Monto de transacción inválido: supera el máximo de $999.999.999 CLP permitido por Transbank.");
+    }
     if (buyOrder.length > 26) {
       throw new Error("buy_order supera los 26 caracteres permitidos por Transbank.");
     }
+
 
     return new WebpayTransaction({
       id: crypto.randomUUID(),
