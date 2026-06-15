@@ -9,7 +9,25 @@ import {
   TransbankGateway,
 } from "../infrastructure/TransbankGateway";
 
-const gateway = new TransbankGateway();
+// Lazy singleton — allows test mocking via __setGatewayForTesting
+let gateway: InstanceType<typeof TransbankGateway> | null = null;
+
+function getGateway(): InstanceType<typeof TransbankGateway> {
+  if (!gateway) gateway = new TransbankGateway();
+  return gateway;
+}
+
+/**
+ * Test-only: inject a mock gateway. Resets after each test.
+ * @internal
+ */
+export async function __setGatewayForTesting(mock: InstanceType<typeof TransbankGateway>): Promise<void> {
+  gateway = mock;
+}
+
+export async function __resetGatewayForTesting(): Promise<void> {
+  gateway = null;
+}
 
 // ─── Helper: buy_order seguro ────────────────────────────────────────────────
 
@@ -57,7 +75,7 @@ export async function initiateTransactionAction(amount: number): Promise<never> 
   let redirectTarget: string;
 
   try {
-    const tbkResponse = await gateway.createTransaction(
+    const tbkResponse = await getGateway().createTransaction(
       transaction.props.buyOrder,
       transaction.props.sessionId,
       transaction.props.amount,
@@ -100,7 +118,7 @@ export async function confirmTransactionAction(token: string) {
   }
 
   try {
-    const response = await gateway.commitTransaction(token);
+    const response = await getGateway().commitTransaction(token);
 
     if (response.status === "AUTHORIZED" && response.response_code === 0) {
       transaction.markAsAuthorized({
@@ -118,7 +136,7 @@ export async function confirmTransactionAction(token: string) {
       // El usuario recargó la página de éxito o hubo un doble envío.
       // 422 NO significa FAILED — significa "ya lo procesé antes".
       // Consultamos el estado real para recuperar lo que pasó.
-      const status = await gateway.getTransactionStatus(token);
+      const status = await getGateway().getTransactionStatus(token);
 
       if (status.status === "AUTHORIZED" && status.response_code === 0) {
         transaction.markAsAuthorized({
@@ -208,7 +226,7 @@ export async function pollStaleTransactionsAction(): Promise<{
     await transactionRepository.save(transaction);
 
     try {
-      const status = await gateway.getTransactionStatus(token);
+      const status = await getGateway().getTransactionStatus(token);
 
       if (status.status === "AUTHORIZED" && status.response_code === 0) {
         transaction.markAsAuthorized({
