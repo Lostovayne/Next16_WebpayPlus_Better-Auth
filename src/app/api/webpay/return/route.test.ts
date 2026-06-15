@@ -1,21 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WebpayTransaction } from "@/features/webpay/domain/Transaction";
 
-// ─── Hoisted Variables ────────────────────────────────────────────────────────
+// ─── Mock Variables (module scope — vi.hoisted removed in vitest 4.x) ─────────
 
-const { mockRepoStore, mockGateway } = vi.hoisted(() => {
-  const commitTransactionMock = vi.fn();
-  return {
-    mockRepoStore: new Map<string, WebpayTransaction>(),
-    mockGateway: {
-      createTransaction: vi.fn(),
-      commitTransaction: (...args: any[]) => commitTransactionMock(...args),
-      getTransactionStatus: vi.fn(),
-      requestRefund: vi.fn(),
-      _commitTransactionMock: commitTransactionMock,
-    },
-  };
-});
+const commitTransactionMock = vi.fn();
+
+const mockGateway = {
+  createTransaction: vi.fn(),
+  commitTransaction: (...args: any[]) => commitTransactionMock(...args),
+  getTransactionStatus: vi.fn(),
+  requestRefund: vi.fn(),
+  _commitTransactionMock: commitTransactionMock,
+};
+
+const mockRepoStore = new Map<string, WebpayTransaction>();
 
 // ─── Mock Modules ─────────────────────────────────────────────────────────────
 
@@ -201,6 +199,57 @@ describe("POST /api/webpay/return", () => {
       expect(response.headers.get("location")).toContain("reason=invalid_payload");
     });
   });
+
+  describe("System errors", () => {
+    it("redirects to system_failed when confirmTransactionAction throws", async () => {
+      // When findByToken itself throws (DB error), confirmTransactionAction propagates the error
+      const originalFindByToken = mockRepoStore.get;
+      mockRepoStore.get = () => {
+        throw new Error("DB connection lost");
+      };
+
+      const req = createPostRequest("token_ws=tok_test_123");
+      const response = await POST(req);
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toContain("reason=system_failed");
+
+      // Restore
+      mockRepoStore.get = originalFindByToken;
+    });
+
+    it("redirects to error page with FAILED reason when commit fails internally", async () => {
+      const tx = WebpayTransaction.initialize("BO123", "session-1", 5000);
+      tx.setToken("tok_test_123");
+      seed(tx);
+
+      // Mock gateway to throw a non-TransbankAlreadyProcessedError
+      // confirmTransactionAction catches it internally, marks FAILED, returns result
+      mockGateway._commitTransactionMock.mockRejectedValueOnce(new Error("Unexpected error"));
+
+      const req = createPostRequest("token_ws=tok_test_123");
+      const response = await POST(req);
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toContain("reason=FAILED");
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("treats request with both token_ws and TBK_TOKEN as cancellation", async () => {
+      const tx = WebpayTransaction.initialize("BO123", "session-1", 5000);
+      seed(tx);
+
+      const req = createPostRequest(
+        "token_ws=tok_test&TBK_TOKEN=tbk_cancel&TBK_ORDEN_COMPRA=BO123&TBK_ID_SESION=session-1",
+      );
+      const response = await POST(req);
+
+      // TBK_TOKEN takes priority — treated as cancellation
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toContain("reason=aborted_by_user");
+    });
+  });
 });
 
 describe("GET /api/webpay/return", () => {
@@ -249,6 +298,27 @@ describe("GET /api/webpay/return", () => {
 
       expect(response.status).toBe(303);
       expect(response.headers.get("location")).toContain("reason=no_token");
+    });
+  });
+
+  describe("System errors", () => {
+    it("redirects to system_failed when transaction lookup throws", async () => {
+      // Mock findByToken to throw
+      const originalFindByToken = mockRepoStore.get;
+      mockRepoStore.get = () => {
+        throw new Error("DB connection lost");
+      };
+
+      const req = createGetRequest(
+        "http://localhost:3000/api/webpay/return?token_ws=tok_test",
+      );
+      const response = await GET(req);
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toContain("reason=system_failed");
+
+      // Restore
+      mockRepoStore.get = originalFindByToken;
     });
   });
 });
