@@ -12,7 +12,8 @@ interface WindowEntry {
  * Suitable for single-instance local dev and tests — NOT for production
  * where requests may hit different instances.
  *
- * Stale entries are cleaned up lazily on each check to prevent unbounded growth.
+ * Stale entries are removed from the Map when their timestamps expire,
+ * preventing unbounded memory growth.
  */
 export class MemoryRateLimitGateway implements RateLimitGateway {
   private readonly store = new Map<string, WindowEntry>();
@@ -22,32 +23,30 @@ export class MemoryRateLimitGateway implements RateLimitGateway {
     const now = Date.now();
     const windowStart = now - windowMs;
 
-    let entry = this.store.get(key);
-    if (!entry) {
-      entry = { timestamps: [] };
-      this.store.set(key, entry);
-    }
+    const existing = this.store.get(key);
 
     // Remove timestamps outside the current window (sliding window eviction)
-    entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart);
+    const activeTimestamps = existing
+      ? existing.timestamps.filter((ts) => ts > windowStart)
+      : [];
 
-    // Remove empty entries to prevent unbounded memory growth
-    if (entry.timestamps.length === 0) {
-      this.store.delete(key);
-      entry = { timestamps: [] };
-      this.store.set(key, entry);
-    }
-
-    const remaining = Math.max(0, limit - entry.timestamps.length);
-    const success = entry.timestamps.length < limit;
+    const remaining = Math.max(0, limit - activeTimestamps.length);
+    const success = activeTimestamps.length < limit;
 
     if (success) {
-      entry.timestamps.push(now);
+      activeTimestamps.push(now);
+    }
+
+    // Only store if there are active timestamps; otherwise let the entry be garbage collected
+    if (activeTimestamps.length > 0) {
+      this.store.set(key, { timestamps: activeTimestamps });
+    } else {
+      this.store.delete(key);
     }
 
     // Calculate when the oldest request in the window expires
-    const reset = entry.timestamps.length > 0
-      ? Math.ceil((entry.timestamps[0] + windowMs) / 1000)
+    const reset = activeTimestamps.length > 0
+      ? Math.ceil((activeTimestamps[0] + windowMs) / 1000)
       : Math.ceil((now + windowMs) / 1000);
 
     return {
