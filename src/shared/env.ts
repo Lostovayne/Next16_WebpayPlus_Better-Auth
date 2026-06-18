@@ -1,5 +1,5 @@
 import { z } from "zod";
-import pino from "pino";
+import logger from "@/shared/lib/logger";
 
 const envSchema = z.object({
   WEBPAY_COMMERCE_CODE: z.string().min(1, "WEBPAY_COMMERCE_CODE is missing"),
@@ -38,7 +38,7 @@ const parsedEnv = envSchema.safeParse({
 });
 
 if (!parsedEnv.success) {
-  pino().fatal({ err: z.treeifyError(parsedEnv.error) }, "Invalid environment variables");
+  logger.fatal({ err: parsedEnv.error.flatten() }, "Invalid environment variables");
   throw new Error("Terminating due to invalid environment variables");
 }
 

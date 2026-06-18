@@ -56,6 +56,14 @@ vi.mock("@/shared/env", () => ({
   },
 }));
 
+vi.mock("@/shared/lib/prisma", () => ({
+  prisma: {
+    transactionAuditLog: {
+      create: vi.fn(async () => ({})),
+    },
+  },
+}));
+
 // ─── Import AFTER mocks ───────────────────────────────────────────────────────
 
 import { POST, GET } from "./route";

@@ -7,6 +7,30 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Enums ─────────────────────────────────────────────────────────────────
+
+enum TransactionStatus {
+  INITIALIZED
+  AUTHORIZED
+  CONFIRMED
+  REJECTED
+  FAILED
+  ABORTED
+  REVERSED
+  POLLED
+}
+
+enum AuditEvent {
+  INITIALIZED
+  AUTHORIZED
+  CONFIRMED
+  ABORTED
+  REJECTED
+  REVERSED
+  POLLED
+  MARKED_FAILED
+}
+
 // ─── BetterAuth Models ──────────────────────────────────────────────────────
 
 model User {
@@ -79,7 +103,7 @@ model WebpayTransaction {
   sessionId String  @map("session_id") @db.VarChar(61)
   amount    Decimal @db.Decimal(17, 2)
   token     String? @unique @db.VarChar(64)
-  status    String  @default("INITIALIZED") @db.VarChar(20)
+  status    TransactionStatus @default(INITIALIZED)
 
   // Return data via callback
   vci                String?   @db.VarChar(10)
@@ -110,7 +134,7 @@ model TransactionAuditLog {
   id            String   @id @default(uuid())
   transactionId String   @map("transaction_id")
   buyOrder      String   @map("buy_order") @db.VarChar(26)
-  event         String   @db.VarChar(50) // INITIALIZED, AUTHORIZED, CONFIRMED, ABORTED, REJECTED, REVERSED, POLLED, MARKED_FAILED
+  event         AuditEvent
   details       Json?    // Arbitrary event payload (token, auth code, error, etc.)
   createdAt     DateTime @default(now()) @map("created_at")
 

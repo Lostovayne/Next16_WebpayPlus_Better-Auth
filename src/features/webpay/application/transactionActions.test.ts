@@ -61,6 +61,14 @@ vi.mock("@/shared/env", () => ({
   },
 }));
 
+vi.mock("@/shared/lib/prisma", () => ({
+  prisma: {
+    transactionAuditLog: {
+      create: vi.fn(async () => ({})),
+    },
+  },
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
