@@ -1,176 +1,186 @@
 <div align="center">
 
-# Webpay Plus — Next.js Integration Reference
+# WebpayPlus-in-Next16
+
+### Integración Completa de Pagos con Transbank Webpay Plus en Next.js 16
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![BetterAuth](https://img.shields.io/badge/BetterAuth-1.6-7C3AED?style=flat-square&logo=betterauth&logoColor=white)
-![Vercel](https://img.shields.io/badge/Deploy-Vercel-000?style=flat-square&logo=vercel&logoColor=white)
+![Vitest](https://img.shields.io/badge/Tests-99-73DD52?style=flat-square&logo=vitest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)
 
-**Production-grade implementation of Webpay Plus REST API on Next.js 16 App Router.**
+**Template profesional para e-commerce chileno con autenticación, rate limiting, logging estructurado, y arquitectura hexagonal.**
 
-No official Transbank SDK. No magic. Just `fetch`, strict types, and architecture that survives production.
-
-[Documentation](https://transbankdevelopers.cl/documentacion/webpay-plus) · [API Reference](https://transbankdevelopers.cl/referencia/webpay#webpay-plus) · [Report a Bug](../../issues)
+[Documentación Transbank](https://transbankdevelopers.cl/documentacion/webpay-plus) · [API Reference](https://transbankdevelopers.cl/referencia/webpay#webpay-plus) · [Reportar Bug](../../issues)
 
 </div>
 
 ---
 
-## Why This Repository?
+## ¿Qué es este repositorio?
 
-Most Webpay integrations found online share the same critical flaws:
+Implementación completa y lista para producción del flujo de pagos **Webpay Plus** de Transbank en **Next.js 16 App Router** con **TypeScript** y **Prisma 7**.
 
-- They call `commit` without handling **422** → marking transactions as `FAILED` when the user actually paid
-- They don't handle Transbank's **5-minute timeout** (GET with `TBK_TOKEN`)
-- They don't distinguish **user cancellation** (POST with `TBK_TOKEN`) from the normal flow (POST with `token_ws`)
-- They lack **idempotency** → double-click = double charge or corrupted state
-- They have no **recovery worker** → if the user pays and loses connection, the transaction stays `INITIALIZED` forever
+No usa el SDK oficial de Transbank. Solo `fetch`, tipos estrictos, y una arquitectura hexagonal que sobrevive en producción.
 
-This repository resolves all of these cases. The implementation is audited against the official API v1.2 reference.
+### Problemas que resuelve
+
+La mayoría de integraciones Webpay que encuentras en línea tienen los mismos errores críticos:
+
+- Llaman `commit` sin manejar **422** → marcan transacciones como `FAILED` cuando el usuario sí pagó
+- No manejan el **timeout de 5 minutos** de Transbank (GET con `TBK_TOKEN`)
+- No distinguen **cancelación del usuario** (POST con `TBK_TOKEN`) del flujo normal (POST con `token_ws`)
+- No tienen **idempotencia** → doble clic = doble cargo o estado corrupto
+- No tienen **worker de recuperación** → si el usuario paga y pierde conexión, la transacción queda `INITIALIZED` para siempre
+
+Este repositorio resuelve todos estos casos. La implementación está auditada contra la referencia oficial de la API v1.2.
 
 ---
 
-## Features
+## Características
 
-| Feature | Status |
+| Característica | Estado |
 |---|---|
-| Webpay Plus REST API v1.2 (no SDK) | ✅ |
-| Correct handling of all 3 return URL scenarios | ✅ |
-| Idempotent confirmation (safe double-click / reload) | ✅ |
-| Smart 422 fallback (already processed → no FAILED) | ✅ |
-| Polling worker for abandoned transactions (Vercel Cron) | ✅ |
-| Explicit state machine in domain (INITIALIZED → terminal) | ✅ |
-| Anti-Corruption Layer (domain doesn't know HTTP) | ✅ |
-| Env var validation with Zod 4 at startup (fail-fast) | ✅ |
-| Success page verifies real DB state (no query param trust) | ✅ |
-| Persist before network call (guaranteed traceability) | ✅ |
-| Refund API implemented (`requestRefund`) | ✅ |
-| Rate limiting (Upstash + memory fallback) | ✅ |
+| Webpay Plus REST API v1.2 (sin SDK) | ✅ |
+| Manejo correcto de los 3 escenarios de return URL | ✅ |
+| Confirmación idempotente (doble clic/reload seguro) | ✅ |
+| Fallback inteligente para 422 (ya procesada → sin FAILED) | ✅ |
+| Polling worker para transacciones abandonadas (Vercel Cron) | ✅ |
+| Máquina de estados explícita en dominio (INITIALIZED → terminal) | ✅ |
+| Anti-Corruption Layer (el dominio no conoce HTTP) | ✅ |
+| Validación de variables de entorno con Zod 4 al startup | ✅ |
+| Página de éxito verifica estado real de la BD | ✅ |
+| Persistencia antes de llamada a red (trazabilidad garantizada) | ✅ |
+| API de reembolsos (`requestRefund`) | ✅ |
+| Rate limiting (Upstash Redis + fallback en memoria) | ✅ |
 | BetterAuth (email/password, 2FA, multi-session) | ✅ |
-| Email verification + password reset (Resend) | ✅ |
-| JWE encrypted session cookies | ✅ |
-| Audit logging (databaseHooks) | ✅ |
-| Unit tests (76 tests, domain + infrastructure + auth) | ✅ |
+| Verificación de email + reset de contraseña (Resend) | ✅ |
+| Sesiones JWE en cookies encriptadas | ✅ |
+| Audit logging completo (tabla `transaction_audit_log`) | ✅ |
+| Pino structured logging (JSON para Datadog/ELK) | ✅ |
+| Idempotencia con P2002 race condition handling | ✅ |
+| 99 tests con Vitest (unit + integration) | ✅ |
 
 ---
 
-## Tech Stack
+## Stack Tecnológico
 
-| Layer | Technology |
+| Capa | Tecnología |
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack) |
-| Language | TypeScript 5 (strict mode) |
+| Lenguaje | TypeScript 5 (strict mode) |
 | ORM | Prisma 7 |
-| Database | PostgreSQL 17+ |
-| Validation | Zod 4 |
-| Auth | BetterAuth 1.6 (email/password, 2FA, multi-session) |
-| Email | Resend (verification, OTP, password reset) |
+| Base de datos | PostgreSQL 17+ |
+| Validación | Zod 4 |
+| Autenticación | BetterAuth 1.6 (email/password, 2FA, multi-session) |
+| Email | Resend (verificación, OTP, reset de contraseña) |
 | Rate Limiting | Upstash Redis (sliding window) |
-| Session Storage | Upstash Redis (secondary storage) |
-| Testing | Vitest |
+| Sesiones | Upstash Redis (secondary storage) |
+| Logging | Pino (structured JSON) |
+| Testing | Vitest (99 tests) |
 | Package Manager | Bun |
-| Deploy | Vercel (Cron Jobs included) |
+| Deploy | Vercel (Cron Jobs incluidos) |
+| SAST | FoxGuard (pre-commit hook) |
 
 ---
 
-## Architecture
+## Arquitectura
 
-Hexagonal Architecture (Ports & Adapters) organized by feature scope:
+Arquitectura Hexagonal (Puertos y Adaptadores) organizada por scope de features:
 
 ```
 src/
-├── app/                              # Next.js App Router (presentation layer)
+├── app/                              # Next.js App Router (capa de presentación)
 │   ├── api/
 │   │   ├── auth/[[...all]]/route.ts  # BetterAuth catch-all handler
 │   │   └── webpay/
-│   │       ├── checkout/route.ts     # POST — initiate payment
-│   │       ├── return/route.ts       # POST + GET — Transbank callback
-│   │       └── poll/route.ts         # GET — recovery worker (cron)
+│   │       ├── checkout/route.ts     # POST — iniciar pago
+│   │       ├── return/route.ts       # POST + GET — callback de Transbank
+│   │       └── poll/route.ts         # GET — worker de recuperación (cron)
 │   └── checkout/
-│       ├── page.tsx                  # Checkout UI
-│       ├── success/page.tsx          # Payment confirmation (verifies DB)
-│       └── error/page.tsx            # Error screen
+│       ├── page.tsx                  # UI de checkout
+│       ├── success/page.tsx          # Confirmación de pago (verifica BD)
+│       └── error/page.tsx            # Pantalla de error
 │
 ├── features/
-│   ├── auth/                         # Authentication feature module
-│   │   ├── auth.ts                   # BetterAuth configuration
+│   ├── auth/                         # Módulo de autenticación
+│   │   ├── auth.ts                   # Configuración de BetterAuth
 │   │   └── infrastructure/
-│   │       ├── email-service.ts           # Resend email templates + sending
-│   │       ├── upstash-secondary-storage.ts  # Redis adapter for sessions
+│   │       ├── email-service.ts           # Templates + envío de emails (Resend)
+│   │       ├── upstash-secondary-storage.ts  # Adaptador Redis para sesiones
 │   │       └── upstash-secondary-storage.test.ts
 │   │
-│   ├── webpay/                       # Payment feature module
+│   ├── webpay/                       # Módulo de pagos
 │   │   ├── domain/
-│   │   │   └── Transaction.ts        # Entity + state machine
+│   │   │   └── Transaction.ts        # Entidad + máquina de estados
 │   │   ├── application/
-│   │   │   └── transactionActions.ts # Use cases (Server Actions)
+│   │   │   └── transactionActions.ts # Casos de uso (Server Actions)
 │   │   └── infrastructure/
-│   │       ├── TransbankGateway.ts           # HTTP adapter → Transbank API
-│   │       └── PrismaTransactionRepository.ts # DB adapter → Domain
+│   │       ├── TransbankGateway.ts           # Adaptador HTTP → API Transbank
+│   │       └── PrismaTransactionRepository.ts # Adaptador BD → Dominio
 │   │
-│   └── rate-limit/                   # Rate limiting feature module
+│   └── rate-limit/                   # Módulo de rate limiting
 │       ├── domain/
-│       │   ├── RateLimitGateway.ts    # Interface (swappable)
-│       │   └── parseWindow.ts         # Shared window parser
+│       │   ├── RateLimitGateway.ts    # Interfaz (intercambiable)
+│       │   └── parseWindow.ts         # Parser de ventana compartido
 │       └── infrastructure/
-│           ├── UpstashRateLimitGateway.ts   # Upstash adapter
-│           └── MemoryRateLimitGateway.ts    # Dev fallback
+│           ├── UpstashRateLimitGateway.ts   # Adaptador Upstash
+│           └── MemoryRateLimitGateway.ts    # Fallback para desarrollo
 │
 └── shared/
-    ├── env.ts                        # Zod-validated env vars
-    ├── lib/prisma.ts                 # Prisma client singleton
-    └── rate-limit.ts                 # Rate limit factory + helpers
+    ├── env.ts                        # Variables de entorno validadas con Zod
+    ├── lib/prisma.ts                 # Singleton de Prisma client
+    └── rate-limit.ts                 # Factory + helpers de rate limiting
 ```
 
-### Data Flow
+### Flujo de Datos
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 1. INITIATE                                                        │
+│ 1. INICIAR                                                          │
 │    checkout/page.tsx                                               │
 │    └── initiateTransactionAction(amount)                            │
-│        ├── Create WebpayTransaction (INITIALIZED)                   │
-│        ├── Persist to DB ← BEFORE network call                      │
+│        ├── Crear WebpayTransaction (INITIALIZED)                   │
+│        ├── Persistir ANTES de llamada a red                        │
 │        ├── TransbankGateway.createTransaction() → token + URL       │
-│        ├── Save token to DB                                         │
-│        └── redirect() → Transbank payment form                      │
+│        ├── Guardar token en BD                                      │
+│        └── redirect() → formulario de pago de Transbank             │
 ├─────────────────────────────────────────────────────────────────────┤
-│ 2. CONFIRM (Transbank callback)                                     │
+│ 2. CONFIRMAR (callback de Transbank)                                │
 │    POST /api/webpay/return?token_ws=<token>                         │
 │    └── confirmTransactionAction(token)                               │
 │        ├── A) Normal: commitTransaction() → AUTHORIZED | REJECTED   │
-│        ├── B) 422: getTransactionStatus() → fallback, no FAILED     │
-│        └── C) Already terminal: idempotent, return current state    │
+│        ├── B) 422: getTransactionStatus() → fallback, sin FAILED    │
+│        └── C) Ya terminal: idempotente, retornar estado actual      │
 ├─────────────────────────────────────────────────────────────────────┤
-│ 3. RECOVER (Vercel Cron)                                            │
+│ 3. RECUPERAR (Vercel Cron)                                          │
 │    GET /api/webpay/poll  [Authorization: Bearer <CRON_SECRET>]      │
 │    └── pollStaleTransactionsAction()                                 │
-│        └── Find INITIALIZED > 10 min → getTransactionStatus()       │
+│        └── Buscar INITIALIZED > 10 min → getTransactionStatus()     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## The 3 Return URL Scenarios
+## Los 3 Escenarios de Return URL
 
-This is where 90% of integrations fail. Transbank can call the `return_url` in **three different ways**, and you must handle all of them:
+Aquí es donde falla el 90% de las integraciones. Transbank puede llamar a la `return_url` de **tres formas diferentes**, y debés manejar todas:
 
-| Scenario | HTTP Method | Parameters |
+| Escenario | Método HTTP | Parámetros |
 |---|---|---|
-| Payment completed (approved or rejected) | `POST` | `token_ws=<token>` |
-| User pressed "Cancel" on the payment page | `POST` | `TBK_TOKEN=<t>` + `TBK_ORDEN_COMPRA=<bo>` + `TBK_ID_SESION=<s>` |
-| Timeout (5 min without user action) | `GET` | `TBK_TOKEN=<t>` + `TBK_ORDEN_COMPRA=<bo>` + `TBK_ID_SESION=<s>` |
+| Pago completado (aprobado o rechazado) | `POST` | `token_ws=<token>` |
+| Usuario presionó "Cancelar" en la página de pago | `POST` | `TBK_TOKEN=<t>` + `TBK_ORDEN_COMPRA=<bo>` + `TBK_ID_SESION=<s>` |
+| Timeout (5 min sin acción del usuario) | `GET` | `TBK_TOKEN=<t>` + `TBK_ORDEN_COMPRA=<bo>` + `TBK_ID_SESION=<s>` |
 
 > [!IMPORTANT]
-> When the user *cancels* or there's a *timeout*, **`token_ws` is NOT present**. If you only handle `token_ws`, you're ignoring two of the three scenarios.
+> Cuando el usuario *cancela* o hay *timeout*, **`token_ws` NO está presente**. Si solo manejás `token_ws`, estás ignorando dos de los tres escenarios.
 
 ---
 
-## Transaction State Machine
+## Máquina de Estados de Transacciones
 
 ```
                     ┌──────────┐
@@ -189,217 +199,195 @@ This is where 90% of integrations fail. Transbank can call the `return_url` in *
 ```
 
 > [!CAUTION]
-> An `AUTHORIZED` transaction **can NEVER revert to `FAILED`**. If Transbank already charged and your system fails afterward, you must call `requestRefund()`. A state rollback is an accounting disaster and a violation of Transbank policies.
+> Una transacción `AUTHORIZED` **NUNCA puede revertirse a `FAILED`**. Si Transbank ya cobró y tu sistema falla después, debés llamar a `requestRefund()`. Un rollback de estado es un desastre contable y una violación de las políticas de Transbank.
 
 ---
 
-## Testing
+## Tests
 
-### Test Suite
+### Suite de Tests
 
-| Module | Tests | Description |
+| Módulo | Tests | Descripción |
 |---|---|---|
-| `Transaction.test.ts` | 24 | Domain state machine (all transitions) |
-| `transactionActions.test.ts` | 17 | Application use cases (initiate, confirm, poll) |
-| `route.test.ts` | 12 | API route handlers (return callback) |
-| `upstash-secondary-storage.test.ts` | 14 | Redis adapter (get/set/delete/increment) |
-| **Total** | **76** | |
+| `Transaction.test.ts` | 24 | Máquina de estados del dominio |
+| `transactionActions.test.ts` | 17 | Casos de uso de aplicación |
+| `route.test.ts` | 12 | Handlers de rutas API |
+| `upstash-secondary-storage.test.ts` | 14 | Adaptador Redis |
+| `PrismaTransactionRepository.test.ts` | 8 | Adaptador de BD |
+| `TransbankGateway.test.ts` | 6 | Adaptador HTTP Transbank |
+| `auth.test.ts` | 18 | Autenticación BetterAuth |
+| **Total** | **99** | |
 
-### Running Tests
+### Ejecutar Tests
 
 ```bash
-# Run all tests
+# Ejecutar todos los tests
 bun run test
 
-# Run with coverage
+# Ejecutar con coverage
 bunx vitest run --coverage
 
-# Run specific test file
+# Ejecutar un archivo específico
 bunx vitest run src/features/webpay/domain/Transaction.test.ts
 ```
 
-### Test Architecture
+### Arquitectura de Tests
 
-- **Unit tests**: Domain entities, state machine, use cases — no external dependencies
-- **Infrastructure tests**: Upstash adapter with mocked `fetch()` — no real Redis needed
-- **Integration tests**: API route handlers with mocked gateways — no real Transbank/DB needed
-
-### Future: Integration Tests with Docker (PR7)
-
-Planned: Docker-based PostgreSQL for integration tests against a real database.
-
-```bash
-# Will be available in PR7:
-bun run test:unit          # Unit tests only (no Docker)
-bun run test:integration   # Integration tests (needs Docker)
-bun run test:all           # Both
-```
+- **Tests unitarios**: Entidades de dominio, máquina de estados, casos de uso — sin dependencias externas
+- **Tests de infraestructura**: Adaptadores Upstash con `fetch()` mockeado — sin Redis real
+- **Tests de integración**: Handlers de rutas API con gateways mockeados — sin Transbank/BD real
 
 ---
 
-## Security
+## Seguridad
 
-### Authentication (BetterAuth)
+### Autenticación (BetterAuth)
 
-| Feature | Configuration |
+| Característica | Configuración |
 |---|---|
-| Email/password auth | Enabled |
-| Email verification | Required before first login |
-| Two-factor auth (2FA) | TOTP + OTP via email |
-| Multi-session | Allowed (multiple devices) |
-| Session expiry | 7 days |
-| Session refresh | Every 24 hours |
-| Fresh age (re-auth) | 30 minutes for sensitive actions |
-| Cookie cache | JWE encrypted (prevents tampering) |
-| CSRF protection | Enabled (sameSite: strict) |
-| Rate limiting | 5 attempts/min for sign-in, 3/min for sign-up |
+| Auth email/password | Habilitada |
+| Verificación de email | Requerida antes del primer login |
+| 2FA (TOTP + OTP) | Habilitada |
+| Multi-session | Permitida (múltiples dispositivos) |
+| Expiración de sesión | 7 días |
+| Refresh de sesión | Cada 24 horas |
+| Fresh age (re-auth) | 30 minutos para acciones sensibles |
+| Cache de cookies | JWE encriptado (anti-tampering) |
+| CSRF protection | Habilitada (sameSite: strict) |
+| Rate limiting | 5 intentos/min para login, 3/min para registro |
 
-### Email Service (Resend)
+### Rate Limiting
 
-| Email Type | Trigger | Template |
+| Endpoint | Límite | Ventana |
 |---|---|---|
-| Verification | On sign-up | HTML button → verify link |
-| OTP (2FA) | On login with 2FA | 6-digit code, 5 min expiry |
-| Password reset | On reset request | HTML button → reset link, 1 hour expiry |
+| POST /api/auth/sign-in | 5 intentos | 1 minuto |
+| POST /api/auth/sign-up | 3 intentos | 1 minuto |
+| POST /api/webpay/checkout | 10 requests | 1 minuto |
 
-### Audit Logging
+### Variables de Entorno
 
-Session events are logged via `databaseHooks`:
-
-```json
-{"event":"session.create","userId":"...","ipAddress":"...","timestamp":"..."}
-{"event":"session.delete","sessionId":"...","userId":"...","timestamp":"..."}
-{"event":"user.update","userId":"...","timestamp":"..."}
-```
-
-Currently: `console.debug` (JSON structured) — captured by Vercel logs.
-Future: Datadog integration for production monitoring.
-
-### Environment Variables Security
-
-- All secrets validated at startup with Zod (fail-fast)
-- `BETTER_AUTH_URL`: no default in production (throws if missing)
-- `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: optional in dev, required in production
-- Upstash: optional in dev (memory fallback), required in production (persistent rate limiting)
+- Todas las secrets validadas al startup con Zod (fail-fast)
+- `BETTER_AUTH_URL`: sin default en producción (lanza error si falta)
+- `RESEND_API_KEY`/`RESEND_FROM_EMAIL`: opcionales en dev, requeridas en producción
+- Upstash: opcional en dev (fallback en memoria), requerido en producción
 
 ---
 
-## Getting Started
+## Inicio Rápido
 
-### Prerequisites
+### Prerrequisitos
 
-- [Bun](https://bun.sh) 1.x (or [Node.js](https://nodejs.org) 20+)
-- PostgreSQL 14+ (local or cloud — [Neon](https://neon.tech) recommended)
-- Active account on [Transbank Developers Portal](https://www.transbankdevelopers.cl)
+- [Bun](https://bun.sh) 1.x (o [Node.js](https://nodejs.org) 20+)
+- PostgreSQL 14+ (local o cloud — [Neon](https://neon.tech) recomendado)
+- Cuenta activa en [Portal de Desarrolladores Transbank](https://www.transbankdevelopers.cl)
 
-### 1. Clone and install
+### 1. Clonar e instalar
 
 ```bash
-git clone https://github.com/Lostovayne/Next16_WebpayPlus_Better-Auth.git
-cd Next16_WebpayPlus_Better-Auth
+git clone https://github.com/Lostovayne/WebpayPlus-in-Next16.git
+cd WebpayPlus-in-Next16
 bun install
 ```
 
-### 2. Configure environment variables
+### 2. Configurar variables de entorno
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your values. See `.env.example` for full documentation of each variable.
+Editá `.env` con tus valores. Ver `.env.example` para documentación completa de cada variable.
 
-### 3. Set up the database
+### 3. Configurar la base de datos
 
 ```bash
-bunx prisma migrate dev --name init
-bunx prisma generate   # (optional — auto-generated if not present)
+bunx prisma migrate dev
 ```
 
-### 4. Start the dev server
+### 4. Iniciar el servidor de desarrollo
 
 ```bash
 bun dev
 ```
 
-Open [http://localhost:3000/checkout](http://localhost:3000/checkout).
+Abrí [http://localhost:3000/checkout](http://localhost:3000/checkout).
 
 ---
 
-## Test Credentials
+## Credenciales de Prueba
 
-These are public, official Transbank integration credentials:
+Estas son las credenciales oficiales públicas de Transbank para integración:
 
-| Variable | Value |
+| Variable | Valor |
 |---|---|
 | `WEBPAY_COMMERCE_CODE` | `597055555532` |
 | `WEBPAY_API_SECRET` | `579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C` |
 
-**Test cards on the Transbank form:**
+**Tarjetas de prueba en el formulario de Transbank:**
 
-| Type | Number | Result |
+| Tipo | Número | Resultado |
 |---|---|---|
-| VISA approved | `4051 8856 0044 6623` | Approved |
-| VISA rejected | `4197 0230 0000 0185` | Rejected |
-| Mastercard approved | `5186 0595 5959 0568` | Approved |
+| VISA aprobada | `4051 8856 0044 6623` | Aprobada |
+| VISA rechazada | `4197 0230 0000 0185` | Rechazada |
+| Mastercard aprobada | `5186 0595 5959 0568` | Aprobada |
 
-CVV: any 3-digit number. Expiry: any future date. RUT: `11111111-1`. Password: `123`.
+CVV: cualquier número de 3 dígitos. Vencimiento: cualquier fecha futura. RUT: `11111111-1`. Contraseña: `123`.
 
 ---
 
-## Environment Variables Reference
+## Variables de Entorno
 
 ### Transbank
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `WEBPAY_COMMERCE_CODE` | ✅ | `597055555532` | Commerce code from Transbank |
-| `WEBPAY_API_SECRET` | ✅ | Integration key | API secret key |
-| `WEBPAY_ENVIRONMENT` | ✅ | `integration` | `integration` or `production` |
+| `WEBPAY_COMMERCE_CODE` | ✅ | `597055555532` | Código de comercio de Transbank |
+| `WEBPAY_API_SECRET` | ✅ | Clave de integración | Secret key de la API |
+| `WEBPAY_ENVIRONMENT` | ✅ | `integration` | `integration` o `production` |
 
-### Database
+### Base de Datos
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `DATABASE_URL` | ✅ | — | Full PostgreSQL connection string |
+| `DATABASE_URL` | ✅ | — | URL completa de conexión PostgreSQL |
 
-### Application
+### Aplicación
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `NEXT_PUBLIC_APP_URL` | ✅ | `http://localhost:3000` | App base URL (no trailing slash) |
-| `CRON_SECRET` | ✅ | — | Secret ≥ 32 chars for `/api/webpay/poll` |
+| `NEXT_PUBLIC_APP_URL` | ✅ | `http://localhost:3000` | URL base de la app (sin slash final) |
+| `CRON_SECRET` | ✅ | — | Secret ≥ 32 chars para `/api/webpay/poll` |
 
-### Upstash (Rate Limiting + Sessions)
+### Upstash (Rate Limiting + Sesiones)
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `UPSTASH_REDIS_REST_URL` | Optional | — | Upstash Redis URL |
-| `UPSTASH_REDIS_REST_TOKEN` | Optional | — | Upstash Redis token |
+| `UPSTASH_REDIS_REST_URL` | Opcional | — | URL de Upstash Redis |
+| `UPSTASH_REDIS_REST_TOKEN` | Opcional | — | Token de Upstash Redis |
 
 ### BetterAuth
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `BETTER_AUTH_SECRET` | ✅ | — | Encryption secret (≥ 32 chars) |
-| `BETTER_AUTH_URL` | ✅ (prod) | `http://localhost:3000` | Base URL for auth endpoints |
+| `BETTER_AUTH_SECRET` | ✅ | — | Secret de encriptación (≥ 32 chars) |
+| `BETTER_AUTH_URL` | ✅ (prod) | `http://localhost:3000` | URL base para endpoints de auth |
 
-### Resend (Email Service)
+### Resend (Email)
 
-| Variable | Required | Default (dev) | Description |
+| Variable | Requerida | Default (dev) | Descripción |
 |---|---|---|---|
-| `RESEND_API_KEY` | Optional* | — | API key from resend.com |
-| `RESEND_FROM_EMAIL` | Optional* | — | Verified sender email |
+| `RESEND_API_KEY` | Opcional* | — | API key de resend.com |
+| `RESEND_FROM_EMAIL` | Opcional* | — | Email verificado para envío |
 
-> *Optional in development (logs instead of sending). Required in production.
+> *Opcional en desarrollo (loguea en vez de enviar). Requerido en producción.
 
 > [!WARNING]
-> Before going to production, **change** `WEBPAY_COMMERCE_CODE`, `WEBPAY_API_SECRET`, and set `WEBPAY_ENVIRONMENT=production`. Integration credentials won't work in production.
+> Antes de ir a producción, **cambiá** `WEBPAY_COMMERCE_CODE`, `WEBPAY_API_SECRET`, y seteá `WEBPAY_ENVIRONMENT=production`. Las credenciales de integración no funcionan en producción.
 
 ---
 
-## Database Schema
+## Schema de Base de Datos
 
-The `webpay_transactions` table stores the complete lifecycle of each payment attempt:
+### Tabla principal: `webpay_transactions`
 
 ```sql
 CREATE TABLE webpay_transactions (
@@ -407,12 +395,13 @@ CREATE TABLE webpay_transactions (
   buy_order           VARCHAR(26)     UNIQUE NOT NULL, -- max 26 chars (Transbank)
   session_id          VARCHAR(61)     NOT NULL,
   amount              DECIMAL(17, 2)  NOT NULL,
-  token               VARCHAR(64)     UNIQUE,          -- null until Transbank returns it
+  token               VARCHAR(64)     UNIQUE,          -- null hasta que Transbank lo retorne
+  payment_url         TEXT,                             -- URL de redirección de Transbank
   status              VARCHAR(20)     DEFAULT 'INITIALIZED',
 
-  -- Transbank callback data
-  vci                 VARCHAR(10),                     -- verification integrity code
-  card_number         VARCHAR(19),                     -- last 4 digits
+  -- Datos del callback de Transbank
+  vci                 VARCHAR(10),                     -- código de verificación de integridad
+  card_number         VARCHAR(19),                     -- últimos 4 dígitos
   accounting_date     VARCHAR(4),
   transaction_date    TIMESTAMP,
   auth_code           VARCHAR(6),
@@ -421,143 +410,182 @@ CREATE TABLE webpay_transactions (
   installments_amount DECIMAL(17, 2),
   installments_number INTEGER,
   aborted_reason      VARCHAR(50),
-  polled_at           TIMESTAMP,                       -- last worker audit timestamp
+  polled_at           TIMESTAMP,                       -- timestamp de última auditoría del worker
 
   created_at          TIMESTAMP       DEFAULT NOW(),
-  updated_at          TIMESTAMP       -- auto-updated by Prisma
+  updated_at          TIMESTAMP       -- auto-updated por Prisma
 );
 
 CREATE INDEX idx_transactions_status_created_polled
   ON webpay_transactions (status, created_at, polled_at);
 ```
 
----
+### Tabla de auditoría: `transaction_audit_log`
 
-## Polling Worker
+```sql
+CREATE TABLE transaction_audit_log (
+  id                  VARCHAR(36)     PRIMARY KEY,
+  transaction_id      VARCHAR(36)     NOT NULL,
+  event_type          VARCHAR(50)     NOT NULL,   -- 'created', 'token_received', 'confirmed', 'aborted', 'polled', 'refunded', 'idempotent_redirect'
+  event_data          JSONB,                      -- datos del evento
+  created_at          TIMESTAMP       DEFAULT NOW(),
 
-The `GET /api/webpay/poll` endpoint resolves the **phantom user scenario**: the user paid at the bank but lost connection (WiFi dropped, phone died, tab closed) before returning to the `return_url`. Without this worker, the transaction would stay `INITIALIZED` forever even though the money was debited.
-
-**How it works:**
-
-1. Vercel Cron calls it every 5 minutes (configured in `vercel.json`)
-2. Finds transactions in `INITIALIZED` for more than 10 minutes
-3. For each one, calls `GET /transactions/{token}` on Transbank
-4. Updates status based on response (`AUTHORIZED`, `REJECTED`, or defers to next cycle)
-5. After 7 days, if Transbank doesn't respond, marks as `FAILED` (status API no longer available)
-
-**Manual invocation in development:**
-
-```bash
-curl -X GET http://localhost:3000/api/webpay/poll \
-  -H "Authorization: Bearer your_cron_secret"
+  FOREIGN KEY (transaction_id) REFERENCES webpay_transactions(id)
+);
 ```
 
 ---
 
-## Deployment to Vercel
+## Worker de Polling
 
-### 1. Set environment variables
+El endpoint `GET /api/webpay/poll` resuelve el **escenario del usuario fantasma**: el usuario pagó en el banco pero perdió conexión (se cayó WiFi, se le murió el teléfono, cerró la pestaña) antes de volver a la `return_url`. Sin este worker, la transacción quedaría `INITIALIZED` para siempre aunque el dinero fue debitado.
 
-In your project dashboard → **Settings → Environment Variables**, add all variables from `.env.example` with production values.
+**Cómo funciona:**
 
-### 2. Ensure Cron Jobs are enabled
+1. Vercel Cron lo llama cada 5 minutos (configurado en `vercel.json`)
+2. Busca transacciones en `INITIALIZED` por más de 10 minutos
+3. Para cada una, llama a `GET /transactions/{token}` en Transbank
+4. Actualiza el estado según la respuesta (`AUTHORIZED`, `REJECTED`, o difiere al próximo ciclo)
+5. Después de 7 días, si Transbank no responde, marca como `FAILED` (la API de estado ya no está disponible)
 
-The `vercel.json` file configures the cron automatically. Ensure your Vercel plan supports Cron Jobs (Pro or higher).
+**Invocación manual en desarrollo:**
+
+```bash
+curl -X GET http://localhost:3000/api/webpay/poll \
+  -H "Authorization: Bearer tu_cron_secret"
+```
+
+---
+
+## Deploy a Vercel
+
+### 1. Setear variables de entorno
+
+En el dashboard del proyecto → **Settings → Environment Variables**, agregá todas las variables de `.env.example` con valores de producción.
+
+### 2. Verificar Cron Jobs
+
+El archivo `vercel.json` configura el cron automáticamente. Verificá que tu plan de Vercel soporte Cron Jobs (Pro o superior).
 
 ### 3. Deploy
 
 ```bash
 vercel --prod
-# Or simply push to main with CI/CD configured
+# O simplemente pusheá a main con CI/CD configurado
 git push origin master
 ```
 
 ---
 
-## Available Commands
+## Comandos Disponibles
 
 ```bash
-bun dev          # Dev server with Turbopack (http://localhost:3000)
-bun build        # Production build
-bun start        # Production server
-bun test         # Run all tests (Vitest)
+bun dev          # Servidor de desarrollo con Turbopack (http://localhost:3000)
+bun build        # Build de producción
+bun start        # Servidor de producción
+bun test         # Ejecutar todos los tests (Vitest)
 
 # Prisma
-bunx prisma migrate dev --name <name>   # New migration
-bunx prisma generate                     # Regenerate client
-bunx prisma studio                       # DB GUI in browser
-bunx prisma migrate status               # Migration status
+bunx prisma migrate dev --name <nombre>   # Nueva migración
+bunx prisma generate                       # Regenerar cliente
+bunx prisma studio                         # GUI de BD en navegador
+bunx prisma migrate status                 # Estado de migraciones
 ```
 
 ---
 
 ## Anti-Corruption Layer
 
-`TransbankGateway` is the only file that knows Transbank exists. The domain and application work with clean interfaces:
+`TransbankGateway` es el único archivo que sabe que Transbank existe. El dominio y la aplicación trabajan con interfaces limpias:
 
 ```typescript
-// ✅ The domain only knows this:
+// ✅ El dominio solo conoce esto:
 interface WebpayInitResponse {
   token: string;
   url: string;
 }
 
-// ✅ And the use case only does this:
+// ✅ Y el caso de uso solo hace esto:
 const { token, url } = await gateway.createTransaction(buyOrder, sessionId, amount, returnUrl);
 
-// ❌ Never this in the domain or application:
+// ❌ Nunca esto en el dominio o la aplicación:
 fetch("https://webpay3g.transbank.cl/...", { headers: { "Tbk-Api-Key-Id": ... } });
 ```
 
-If Transbank changes their API, URL, or headers tomorrow, **you only touch `TransbankGateway.ts`** — the rest of the system doesn't know anything happened.
+Si Transbank cambia su API, URL, o headers mañana, **solo tocás `TransbankGateway.ts`** — el resto del sistema no se entera.
 
 ---
 
-## 422 Error Handling
+## Manejo de Errores 422
 
-Transbank's 422 deserves special attention. Their documentation states:
+El 422 de Transbank merece atención especial. Su documentación dice:
 
-> *If the merchant retries the commit of an already-confirmed transaction, they'll receive HTTP 422.*
+> *Si el comercio reintenta el commit de una transacción ya confirmada, recibirá HTTP 422.*
 
-This happens more often than you'd think: user double-click, page reload, worker retry, network drop after commit. The correct approach is **not** marking `FAILED` — it's querying the real status:
+Esto pasa más seguido de lo que pensás: doble clic del usuario, reload de página, reintento del worker, caída de red después del commit. El enfoque correcto **no es** marcar `FAILED` — es consultar el estado real:
 
 ```typescript
 try {
   const response = await gateway.commitTransaction(token);
-  // Normal flow...
+  // Flujo normal...
 } catch (error) {
   if (error instanceof TransbankAlreadyProcessedError) {
-    // 422: already processed → recover real status without marking FAILED
+    // 422: ya procesada → recuperar estado real sin marcar FAILED
     const status = await gateway.getTransactionStatus(token);
-    // Now we update the status correctly
+    // Ahora sí actualizamos el estado correctamente
   }
 }
 ```
 
 ---
 
-## Transbank API Limitations
+## Limitaciones de la API de Transbank
 
-| Restriction | Value | Impact |
+| Restricción | Valor | Impacto |
 |---|---|---|
-| `buy_order` max | 26 characters | Validated in domain |
-| `session_id` max | 61 characters | UUID v4 = 36 chars ✅ |
-| Max amount CLP | 999,999,999 | Validated in domain |
-| Min amount | > 0 | Validated in domain |
-| Status availability (`GET /transactions/{token}`) | 7 days from creation | Worker respects this |
-| Refund (`POST /transactions/{token}/refunds`) | Same business day for reversal; nullification has different rules | Don't ignore in production |
+| `buy_order` máximo | 26 caracteres | Validado en dominio |
+| `session_id` máximo | 61 caracteres | UUID v4 = 36 chars ✅ |
+| Monto máximo CLP | 999,999,999 | Validado en dominio |
+| Monto mínimo | > 0 | Validado en dominio |
+| Disponibilidad de estado (`GET /transactions/{token}`) | 7 días desde creación | El worker respeta esto |
+| Reembolso (`POST /transactions/{token}/refunds`) | Mismo día hábil para reversión; anulación tiene reglas distintas | No ignorar en producción |
+
+---
+
+## Roadmap
+
+### Completado ✅
+
+- [x] Integración Webpay Plus REST API v1.2
+- [x] Manejo de los 3 escenarios de return URL
+- [x] Idempotencia con P2002 race condition
+- [x] Polling worker para transacciones abandonadas
+- [x] BetterAuth (email/password, 2FA, multi-session)
+- [x] Rate limiting (Upstash Redis + memoria)
+- [x] Pino structured logging
+- [x] Audit trail completo
+- [x] 99 tests con Vitest
+- [x] FoxGuard SAST (pre-commit)
+
+### Próximos pasos 🔜
+
+- [ ] Observabilidad Datadog (métricas, traces, dashboards) — [#17](../../issues/17)
+- [ ] Docker para tests de integración
+- [ ] Webhook de confirmación de Transbank
+- [ ] Dashboard de administración de transacciones
+- [ ] Soporte para Webpay Plus Mall (multi-sucursal)
 
 ---
 
 ## Contributing
 
-1. Fork the repository
-2. Create a branch: `git checkout -b feat/my-improvement`
-3. Commit your changes: `git commit -m "feat: description"`
-4. Push: `git push origin feat/my-improvement`
-5. Open a Pull Request
+1. Forkeá el repositorio
+2. Creá una branch: `git checkout -b feat/mi-mejora`
+3. Commiteá los cambios: `git commit -m "feat: descripción"`
+4. Pusheá: `git push origin feat/mi-mejora`
+5. Abrí un Pull Request
 
-Before submitting, ensure tests pass:
+Antes de enviar, verificá que los tests pasen:
 
 ```bash
 bun test
@@ -565,14 +593,16 @@ bun test
 
 ---
 
-## License
+## Licencia
 
-MIT — use it, modify it, sell it if you want. Just don't come crying when you didn't handle the 422.
+MIT — usalo, modificalo, vendelo si querés. Solo no vengas a quejarte cuando no manejaste el 422.
 
 ---
 
 <div align="center">
 
-Documentation: [transbankdevelopers.cl](https://transbankdevelopers.cl) · API Reference: [Webpay Plus](https://transbankdevelopers.cl/referencia/webpay#webpay-plus)
+Integración de pagos para Chile 🇨🇱 con [Transbank Webpay Plus](https://transbankdevelopers.cl)
+
+**Hecho con Next.js 16, TypeScript, Prisma 7, y BetterAuth**
 
 </div>
