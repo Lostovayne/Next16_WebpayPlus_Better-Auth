@@ -3,7 +3,6 @@
 import { env } from "@/shared/env";
 import logger from "@/shared/lib/logger";
 import { prisma } from "@/shared/lib/prisma";
-import { redirect } from "next/navigation";
 import { AuditEvent, Prisma } from "generated/prisma";
 import { WebpayTransaction } from "../domain/Transaction";
 import { transactionRepository } from "../infrastructure/PrismaTransactionRepository";
@@ -95,7 +94,12 @@ function generateBuyOrder(): string {
  * Si Transbank falla en el paso 3, la transacción queda en BD como FAILED
  * y tenemos trazabilidad. Sin el paso 2 perderíamos el registro completamente.
  */
-export async function initiateTransactionAction(amount: number, idempotencyKey?: string): Promise<never> {
+export interface TransbankRedirectData {
+  url: string;
+  token: string;
+}
+
+export async function initiateTransactionAction(amount: number, idempotencyKey?: string): Promise<TransbankRedirectData> {
   if (amount <= 0) throw new Error("Monto inválido: debe ser mayor a cero.");
 
   // Idempotency: when a key is provided, use it directly as the buyOrder
@@ -111,9 +115,9 @@ export async function initiateTransactionAction(amount: number, idempotencyKey?:
     const existing = await transactionRepository.findByBuyOrder(idempotencyKey);
     if (existing) {
       if (existing.props.status === "INITIALIZED" && existing.props.token && existing.props.paymentUrl) {
-        // Re-use existing transaction — redirect to Transbank with stored URL
+        // Re-use existing transaction — return redirect data for POST form
         await logAuditEvent(existing.props.id, buyOrder, "INITIALIZED", { idempotent: true } as Prisma.InputJsonValue);
-        redirect(`${existing.props.paymentUrl}?token_ws=${existing.props.token}`);
+        return { url: existing.props.paymentUrl, token: existing.props.token };
       }
       if (existing.props.status === "INITIALIZED" && existing.props.token && !existing.props.paymentUrl) {
         // Token exists but paymentUrl missing (Transbank returned empty URL) — not redirectable
@@ -150,7 +154,7 @@ export async function initiateTransactionAction(amount: number, idempotencyKey?:
       if (raceExisting) {
         if (raceExisting.props.status === "INITIALIZED" && raceExisting.props.token && raceExisting.props.paymentUrl) {
           await logAuditEvent(raceExisting.props.id, buyOrder, "INITIALIZED", { idempotent: true } as Prisma.InputJsonValue);
-          redirect(`${raceExisting.props.paymentUrl}?token_ws=${raceExisting.props.token}`);
+          return { url: raceExisting.props.paymentUrl, token: raceExisting.props.token };
         }
         // Terminal states (except FAILED) — cannot retry
         if (raceExisting.isTerminal && raceExisting.props.status !== "FAILED") {
@@ -166,7 +170,9 @@ export async function initiateTransactionAction(amount: number, idempotencyKey?:
   await logAuditEvent(transaction.props.id, transaction.props.buyOrder, "INITIALIZED", { amount } as Prisma.InputJsonValue);
 
   const returnUrl = `${env.NEXT_PUBLIC_APP_URL}/api/webpay/return`;
-  let redirectTarget: string;
+
+  let transbankUrl: string;
+  let transbankToken: string;
 
   try {
     const tbkResponse = await getGateway().createTransaction(
@@ -180,7 +186,8 @@ export async function initiateTransactionAction(amount: number, idempotencyKey?:
     transaction.setPaymentUrl(tbkResponse.url);
     await transactionRepository.save(transaction);
 
-    redirectTarget = `${tbkResponse.url}?token_ws=${tbkResponse.token}`;
+    transbankUrl = tbkResponse.url;
+    transbankToken = tbkResponse.token;
   } catch (err) {
     transaction.markAsFailed();
     await transactionRepository.save(transaction);
@@ -188,8 +195,12 @@ export async function initiateTransactionAction(amount: number, idempotencyKey?:
     throw new Error("Error al iniciar el pago. Intenta de nuevo más tarde.");
   }
 
-  // redirect() debe ir fuera del try/catch — Next.js lo implementa con una excepción interna
-  redirect(redirectTarget);
+  // Return redirect data for POST form submission to Transbank.
+  // NOTE: Next.js Server Actions only support GET redirects via redirect().
+  // Transbank docs specify POST with token_ws in body. The client component
+  // renders an auto-submitting form to comply with the POST requirement.
+  // See: https://transbankdevelopers.cl/documentacion/webpay-plus
+  return { url: transbankUrl!, token: transbankToken! };
 }
 
 // ─── Use Case 2: Confirmar Transacción ──────────────────────────────────────
@@ -210,6 +221,22 @@ export async function confirmTransactionAction(token: string) {
 
   // Idempotencia: estado terminal significa que ya fue procesada
   if (transaction.isTerminal) {
+    return transaction.props;
+  }
+
+  // Token expiration: si el token de Transbank expiró (> 5 min), no intentar commit.
+  // Transbank retornaría error de todos modos, pero marcamos FAILED con observabilidad
+  // en vez de hacer una llamada de red innecesaria.
+  if (transaction.isTokenExpired) {
+    logger.warn(
+      { token, buyOrder: transaction.props.buyOrder, createdAt: transaction.props.createdAt },
+      "[Webpay] Token expirado (>5min), marcando como FAILED sin llamar a Transbank",
+    );
+    transaction.markAsFailed();
+    await transactionRepository.save(transaction);
+    await logAuditEvent(transaction.props.id, transaction.props.buyOrder, "MARKED_FAILED", {
+      reason: "token_expired",
+    } as Prisma.InputJsonValue);
     return transaction.props;
   }
 

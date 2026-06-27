@@ -86,6 +86,17 @@ describe("WebpayTransaction.initialize", () => {
     const tx = WebpayTransaction.initialize("A".repeat(26), "s", 1000);
     expect(tx.props.buyOrder).toHaveLength(26);
   });
+
+  it("rejects session_id > 61 chars (Transbank limit)", () => {
+    expect(() => WebpayTransaction.initialize("BO123", "x".repeat(62), 1000)).toThrow(
+      "61 caracteres",
+    );
+  });
+
+  it("accepts session_id exactly 61 chars", () => {
+    const tx = WebpayTransaction.initialize("BO123", "x".repeat(61), 1000);
+    expect(tx.props.sessionId).toHaveLength(61);
+  });
 });
 
 // ─── State Transitions ────────────────────────────────────────────────────────
@@ -278,6 +289,57 @@ describe("isTerminal", () => {
   it("returns false for INITIALIZED", () => {
     const tx = createTransaction();
     expect(tx.isTerminal).toBe(false);
+  });
+});
+
+// ─── isTokenExpired ─────────────────────────────────────────────────────────
+
+describe("isTokenExpired", () => {
+  it("returns false when token was just created", () => {
+    const tx = createTransaction();
+    expect(tx.isTokenExpired).toBe(false);
+  });
+
+  it("returns true when created > 5 minutes ago", () => {
+    const tx = createTransaction();
+    // Simulate creation 6 minutes ago
+    const sixMinutesAgo = Date.now() - 6 * 60 * 1000;
+    Object.defineProperty(tx.props, "createdAt", {
+      value: new Date(sixMinutesAgo),
+      writable: false,
+    });
+    expect(tx.isTokenExpired).toBe(true);
+  });
+
+  it("returns false for non-INITIALIZED transactions regardless of age", () => {
+    const tx = createTransaction({ status: "AUTHORIZED" });
+    const sixMinutesAgo = Date.now() - 6 * 60 * 1000;
+    Object.defineProperty(tx.props, "createdAt", {
+      value: new Date(sixMinutesAgo),
+      writable: false,
+    });
+    expect(tx.isTokenExpired).toBe(false);
+  });
+
+  it("returns false exactly at 5 minutes (boundary)", () => {
+    const tx = createTransaction();
+    const exactlyFiveMinutes = Date.now() - 5 * 60 * 1000;
+    Object.defineProperty(tx.props, "createdAt", {
+      value: new Date(exactlyFiveMinutes),
+      writable: false,
+    });
+    // Exactly at boundary: elapsed = TOKEN_TTL_MS, NOT >, so NOT expired
+    expect(tx.isTokenExpired).toBe(false);
+  });
+
+  it("returns true one millisecond after 5 minutes", () => {
+    const tx = createTransaction();
+    const fiveMinutesPlusOne = Date.now() - (5 * 60 * 1000 + 1);
+    Object.defineProperty(tx.props, "createdAt", {
+      value: new Date(fiveMinutesPlusOne),
+      writable: false,
+    });
+    expect(tx.isTokenExpired).toBe(true);
   });
 });
 

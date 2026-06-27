@@ -70,12 +70,6 @@ vi.mock("@/shared/lib/prisma", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({
-  redirect: vi.fn((url: string) => {
-    throw new Error(`NEXT_REDIRECT:${url}`);
-  }),
-}));
-
 // ─── Import Actions + DI helpers ──────────────────────────────────────────────
 
 import {
@@ -87,7 +81,6 @@ import {
   __resetGatewayForTesting,
 } from "./transactionActions";
 import { TransbankAlreadyProcessedError } from "../infrastructure/TransbankGateway";
-import { redirect } from "next/navigation";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -245,9 +238,23 @@ describe("confirmTransactionAction", () => {
 
       const result = await confirmTransactionAction("tok_test_123");
 
-      expect(result.status).toBe("FAILED");
-    });
+    expect(result.status).toBe("FAILED");
   });
+
+  it("marks as FAILED when token is expired (>5 min) without calling Transbank", async () => {
+    const tx = WebpayTransaction.initialize("BO123", "session-1", 5000);
+    tx.setToken("tok_expired_1");
+    // Simulate creation 6 minutes ago
+    tx.props.createdAt = new Date(Date.now() - 6 * 60 * 1000);
+    seed(tx);
+
+    const result = await confirmTransactionAction("tok_expired_1");
+
+    expect(result.status).toBe("FAILED");
+    // Should NOT call Transbank at all
+    expect(mockGateway._commitTransactionMock).not.toHaveBeenCalled();
+  });
+});
 });
 
 describe("abortTransactionAction", () => {
@@ -299,13 +306,19 @@ describe("abortTransactionAction", () => {
 
 describe("initiateTransactionAction", () => {
   describe("Happy path", () => {
-    it("creates transaction, persists to DB, calls Transbank, and redirects", async () => {
+    it("creates transaction, persists to DB, calls Transbank, and returns redirect data", async () => {
       mockGateway._createTransactionMock.mockResolvedValueOnce({
         token: "tbk_new_token_123",
         url: "https://webpay3g.transbank.cl/webpayserver/init_transaction",
       });
 
-      await expect(initiateTransactionAction(5000)).rejects.toThrow("NEXT_REDIRECT");
+      const result = await initiateTransactionAction(5000);
+
+      // Verify redirect data returned for POST form submission
+      expect(result).toEqual({
+        url: "https://webpay3g.transbank.cl/webpayserver/init_transaction",
+        token: "tbk_new_token_123",
+      });
 
       // Verify transaction was persisted
       const allTx = Array.from(mockRepoStore.values());
@@ -314,11 +327,6 @@ describe("initiateTransactionAction", () => {
       expect(tx.props.amount).toBe(5000);
       expect(tx.props.status).toBe("INITIALIZED");
       expect(tx.props.token).toBe("tbk_new_token_123");
-
-      // Verify redirect was called with correct URL
-      expect(redirect).toHaveBeenCalledWith(
-        expect.stringContaining("https://webpay3g.transbank.cl/webpayserver/init_transaction?token_ws=tbk_new_token_123"),
-      );
     });
 
     it("generates unique buy_order with BO prefix", async () => {
@@ -327,7 +335,7 @@ describe("initiateTransactionAction", () => {
         url: "https://webpay3g.transbank.cl/webpayserver/init_transaction",
       });
 
-      await expect(initiateTransactionAction(5000)).rejects.toThrow("NEXT_REDIRECT");
+      await initiateTransactionAction(5000);
 
       const allTx = Array.from(mockRepoStore.values());
       expect(allTx[0].props.buyOrder).toMatch(/^BO[A-F0-9]{20}$/);
@@ -349,8 +357,9 @@ describe("initiateTransactionAction", () => {
         url: "https://webpay3g.transbank.cl/webpayserver/init_transaction",
       });
 
-      await expect(initiateTransactionAction(999_999_999)).rejects.toThrow("NEXT_REDIRECT");
+      const result = await initiateTransactionAction(999_999_999);
 
+      expect(result.token).toBe("token_max");
       const allTx = Array.from(mockRepoStore.values());
       expect(allTx[0].props.amount).toBe(999_999_999);
     });
@@ -712,7 +721,7 @@ describe("Audit logging", () => {
       url: "https://webpay3g.transbank.cl/webpayserver/init_transaction",
     });
 
-    await expect(initiateTransactionAction(5000)).rejects.toThrow("NEXT_REDIRECT");
+    await initiateTransactionAction(5000);
 
     expect(auditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -64,6 +64,9 @@ export class WebpayTransaction {
 
   // ─── Factory Method ───────────────────────────────────────────────────────
 
+  /** Token TTL de Transbank: 5 minutos desde la creación. */
+  static readonly TOKEN_TTL_MS = 5 * 60 * 1000;
+
   public static initialize(buyOrder: string, sessionId: string, amount: number): WebpayTransaction {
     if (amount <= 0) {
       throw new Error("Monto de transacción inválido: debe ser mayor a cero.");
@@ -75,7 +78,10 @@ export class WebpayTransaction {
     if (buyOrder.length > 26) {
       throw new Error("buy_order supera los 26 caracteres permitidos por Transbank.");
     }
-
+    // session_id: Transbank limita a 61 caracteres (UUID v4 = 36, v7 = 36, OK)
+    if (sessionId.length > 61) {
+      throw new Error("session_id supera los 61 caracteres permitidos por Transbank.");
+    }
 
     return new WebpayTransaction({
       id: crypto.randomUUID(),
@@ -163,6 +169,23 @@ export class WebpayTransaction {
   /** El Worker llama a esto para registrar cuándo auditó esta transacción. */
   public markAsPolled(): void {
     this.props.polledAt = new Date();
+  }
+
+  /**
+   * Indica si el token de Transbank ya expiró (> 5 min desde creación).
+   *
+   * Transbank asigna un TTL de 5 minutos al token. Si el usuario no completa
+   * el pago en ese plazo, el token caduca y el commit retornará error.
+   * Este método permite detectar el caso proactivamente antes de llamar a Transbank.
+   *
+   * Referencia: https://transbankdevelopers.cl/documentacion/webpay-plus
+   * "una vez invocado este método, el token que es entregado tiene un periodo
+   * reducido de vida de 5 minutos"
+   */
+  public get isTokenExpired(): boolean {
+    if (this.props.status !== "INITIALIZED") return false;
+    const elapsed = Date.now() - this.props.createdAt.getTime();
+    return elapsed > WebpayTransaction.TOKEN_TTL_MS;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

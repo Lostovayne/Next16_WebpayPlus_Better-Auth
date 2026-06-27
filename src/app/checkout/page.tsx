@@ -1,4 +1,5 @@
 import { initiateTransactionAction } from "@/features/webpay/application/transactionActions";
+import { TransbankRedirectForm } from "./TransbankRedirectForm";
 
 // ─── Datos del producto (en un sistema real vendrían de props/params/DB) ─────
 const PRODUCT = {
@@ -165,30 +166,16 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* Botón de pago */}
-            <form
-              action={async () => {
+            {/* Botón de pago — POST redirect a Transbank */}
+            <TransbankRedirectForm
+              action={async (formData) => {
                 "use server";
-                await initiateTransactionAction(PRODUCT.price);
+                const amount = Number(formData.get("amount"));
+                return initiateTransactionAction(amount);
               }}
-            >
-              <button
-                type="submit"
-                className="group w-full relative overflow-hidden rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] transition-all duration-150 px-5 py-4 font-semibold text-white shadow-lg shadow-indigo-900/40 cursor-pointer"
-              >
-                {/* Shimmer effect */}
-                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                
-                <span className="relative flex items-center justify-center gap-3">
-                  {/* Lock icon */}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-80">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span className="text-base">Pagar {formatCLP(PRODUCT.price)} con Webpay</span>
-                </span>
-              </button>
-            </form>
+              amount={PRODUCT.price}
+              formatCLP={formatCLP}
+            />
 
             {/* Badge Webpay */}
             <div className="flex items-center justify-center gap-2 pt-1">
